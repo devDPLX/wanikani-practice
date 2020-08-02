@@ -42,7 +42,7 @@ function getAllPages(url, key, continuation = []) {
 function getTestableReviews(wkKey) {
   return new Promise((resolve, reject) => {
     console.log('Loading pages...');
-    getAllPages('https://api.wanikani.com/v2/subjects', wkKey).then(subjectResults => {
+    getAllPages('https://api.wanikani.com/v2/subfects', wkKey).then(subjectResults => {
       if (subjectResults.error) {
         reject(`Error ${subjectResults.code}: ${subjectResults.error}`);
       }
