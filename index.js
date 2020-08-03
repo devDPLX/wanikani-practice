@@ -39,10 +39,10 @@ function getAllPages(url, key, continuation = []) {
   });
 }
 
-function getTestableReviews(wkKey) {
+function getTestableReviews(wkKey,filterString) {
   return new Promise((resolve, reject) => {
     console.log('Loading pages...');
-    getAllPages('https://api.wanikani.com/v2/subjects', wkKey).then(subjectResults => {
+    getAllPages(`https://api.wanikani.com/v2/subjects${filterString}`, wkKey).then(subjectResults => {
       if (subjectResults.error) {
         reject(`Error ${subjectResults.code}: ${subjectResults.error}`);
       }
@@ -53,15 +53,40 @@ function getTestableReviews(wkKey) {
           reject(`Error ${reviewResults.code}: ${reviewResults.error}`);
         }
         let subjects = subjectResults.filter(sResult => {
-          return reviewResults.find(rResult => {
-            return rResult.data.subject_id == sResult.id;
+          let validResults = reviewResults.find(rResult => {
+            return rResult.data.subject_id == sResult.id && sResult.data.characters;
           });
+          return validResults;
         });
         console.log(subjects.length.toString(), 'testable reviews found.');
         resolve(subjects);
       }).catch(error => {
         reject(error);
       });
+    }).catch(error => {
+      reject(error);
+    });
+  });
+}
+
+function getUserInfo() {
+  return new Promise((resolve,reject) => {
+    nodeFetch('https://api.wanikani.com/v2/user',{
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${wkKey}`
+      }
+    }).then(res => res.json()).then(json => {
+      if (json.error) {
+        reject(`Error ${json.code}: ${json.error}`);
+        return;
+      }
+      resolve({
+        username: json.data.username,
+        level: json.data.level
+      });
+    }).catch(error => {
+      reject(error);
     }).catch(error => {
       reject(error);
     });
@@ -119,6 +144,10 @@ function getAnswer(review) {
 
 async function testReviews(reviews) {
   let review = reviews[Math.floor(Math.random() * reviews.length)];
+  /*if (review.data.slug !== 'hat') {
+    testReviews(reviews);
+    return;
+  }*/
   let response = await getAnswer(review);
   if (response !== undefined) {
     console.log('\n');
@@ -128,9 +157,55 @@ async function testReviews(reviews) {
   }
 }
 
-getTestableReviews(wkKey).then(result => {
-  testReviews(result);
-}).catch(error => {
-  console.log(error);
-  newRL.close();
-});
+function getLevel(maxLevel) {
+  return new Promise((resolve,reject) => {
+    newRL.question('What level would you like to test? You can say \'all\' or just leave it blank for all levels.\n', function(levelResponse) {
+      if (levelResponse == 'all' || levelResponse == '') {
+        resolve('all');
+        return;
+      }
+      let level = parseInt(levelResponse);
+      if (!level) {
+        console.log('You didn\'t enter a number.');
+        return resolve(getLevel(maxLevel));
+      }
+      if (level > maxLevel) {
+        console.log('You haven\'t reached that level yet!');
+        return resolve(getLevel(maxLevel));
+      }
+      resolve(level);
+    });
+  })
+}
+
+function getCategory() {
+  return new Promise((resolve,reject) => {
+    newRL.question('What category would you like to test? Valid options are: radical, kanji, vocabulary, all, or just leaving it blank.\n', function(category) {
+      switch (category) {
+        case 'radical' : case 'kanji': case 'vocabulary': case 'all': resolve(category); break;
+        case '': resolve('all'); break;
+        default:
+          console.log('That wasn\'t a valid entry.');
+          return resolve(getCategory());
+      }
+    });
+  });
+}
+
+async function start() {
+  let userInfo = await getUserInfo();
+  console.log(`Hello, ${userInfo.username}!`);
+  let maxLevel = userInfo.level;
+  let level = await getLevel(maxLevel);
+  let category = await getCategory();
+  let filterString = `${level !== 'all' || category !== 'all' ? `?${level !== 'all' ? `levels=${level}` : ''}${level !== 'all' && category !== 'all' ? '&' : ''}${category !== 'all' ? `types=${category}` : ''}` : ''}`;
+  getTestableReviews(wkKey,filterString).then(result => {
+    testReviews(result);
+  }).catch(error => {
+    console.log(error);
+    newRL.close();
+  });
+  //
+}
+
+start();
