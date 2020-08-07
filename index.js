@@ -41,20 +41,22 @@ function getAllPages(url, key, continuation = []) {
 
 function getTestableReviews(wkKey,filterString) {
   return new Promise((resolve, reject) => {
-    console.log('Loading pages...');
+    console.log('Loading subjects...');
     getAllPages(`https://api.wanikani.com/v2/subjects${filterString}`, wkKey).then(subjectResults => {
       if (subjectResults.error) {
         reject(`Error ${subjectResults.code}: ${subjectResults.error}`);
       }
-      console.log(subjectResults.length.toString(), 'results found.');
+      console.log(subjectResults.length.toString(), 'subjects found.');
       console.log('Comparing with available reviews...');
-      getAllPages('https://api.wanikani.com/v2/reviews', wkKey).then(reviewResults => {
+      getAllPages(`https://api.wanikani.com/v2/review_statistics`, wkKey).then(reviewResults => {
         if (reviewResults.error) {
           reject(`Error ${reviewResults.code}: ${reviewResults.error}`);
         }
+        console.log(reviewResults.length.toString(), 'reviews found.');
         let subjects = subjectResults.filter(sResult => {
           let validResults = reviewResults.find(rResult => {
-            return rResult.data.subject_id == sResult.id && sResult.data.characters;
+            let isValid = rResult.data.subject_id == sResult.id && sResult.data.characters;
+            return isValid;
           });
           return validResults;
         });
@@ -144,10 +146,6 @@ function getAnswer(review) {
 
 async function testReviews(reviews) {
   let review = reviews[Math.floor(Math.random() * reviews.length)];
-  /*if (review.data.slug !== 'hat') {
-    testReviews(reviews);
-    return;
-  }*/
   let response = await getAnswer(review);
   if (response !== undefined) {
     console.log('\n');
@@ -178,16 +176,27 @@ function getLevel(maxLevel) {
   })
 }
 
-function getCategory() {
+function getCategoryString() {
   return new Promise((resolve,reject) => {
-    newRL.question('What category would you like to test? Valid options are: radical, kanji, vocabulary, all, or just leaving it blank.\n', function(category) {
-      switch (category) {
-        case 'radical' : case 'kanji': case 'vocabulary': case 'all': resolve(category); break;
-        case '': resolve('all'); break;
-        default:
-          console.log('That wasn\'t a valid entry.');
-          return resolve(getCategory());
+    newRL.question('What category would you like to test? Valid options are: radical, kanji, vocabulary, all, or just leaving it blank.\n', function(response) {
+      let categories = []
+      for (let category of response.split(' ')) {
+        switch (category) {
+          case 'radical': case 'r': categories.push('radical'); break;
+          case 'kanji': case 'k': categories.push('kanji'); break;
+          case 'vocabulary': case 'v': categories.push('vocabulary'); break;
+          case 'all': 
+            categories.push('radical','kanji','vocabulary');
+            break;
+          case '': 
+            categories.push('radical','kanji','vocabulary'); 
+            break;
+          default:
+            console.log('One of your options wasn\'t a valid entry.');
+            return resolve(getCategoryString());
+        }
       }
+      resolve(categories.join(','));
     });
   });
 }
@@ -196,9 +205,14 @@ async function start() {
   let userInfo = await getUserInfo();
   console.log(`Hello, ${userInfo.username}!`);
   let maxLevel = userInfo.level;
+  let maxLevelRange = [];
+  for (let i = 1; i <= maxLevel; i++) {
+    maxLevelRange.push(i);
+  }
+  maxLevelRange = maxLevelRange.join(',');
   let level = await getLevel(maxLevel);
-  let category = await getCategory();
-  let filterString = `${level !== 'all' || category !== 'all' ? `?${level !== 'all' ? `levels=${level}` : ''}${level !== 'all' && category !== 'all' ? '&' : ''}${category !== 'all' ? `types=${category}` : ''}` : ''}`;
+  let categoryString = await getCategoryString();
+  let filterString = `?levels=${level === 'all' ? maxLevelRange : level}&types=${categoryString}`;
   getTestableReviews(wkKey,filterString).then(result => {
     testReviews(result);
   }).catch(error => {
