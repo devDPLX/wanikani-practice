@@ -103,7 +103,10 @@ function getAnswer(review) {
     let validMeanings = meanings.filter(meaning => meaning.accepted_answer);
     let auxMeanings = review.data.auxiliary_meanings;
     newRL.question(`What is the meaning of the ${object}: ${characters}?\n`, function(response) {
-      if (response == 'stop!') resolve(undefined);
+      if (response == '!stop') {
+        resolve(undefined);
+        return;
+      }
       if (validMeanings.find(meaning => meaning.meaning.toLowerCase() == response.toLowerCase()) ||
             auxMeanings.find(meaning => meaning.meaning.toLowerCase() == response.toLowerCase())) {
         console.log('Correct!');
@@ -114,7 +117,10 @@ function getAnswer(review) {
         let readings = review.data.readings;
         let validReadings = readings.filter(reading => reading.accepted_answer);
         newRL.question(`What is the reading of the ${object}: ${characters}?\n`, function(secondResponse) {
-          if (secondResponse == 'stop!') resolve(undefined);
+          if (secondResponse == '!stop') {
+            resolve(undefined);
+            return;
+          }
           if (validReadings.find(reading => romaji.fromKana(reading.reading) == secondResponse)) {
             console.log('Correct!');
             resolve(true);
@@ -222,4 +228,5 @@ async function start() {
   //
 }
 
+//console.log('The color \x1b[36mblue\x1b[0m is blue.');
 start();
